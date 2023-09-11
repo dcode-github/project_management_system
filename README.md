@@ -1,4 +1,4 @@
-TTL Project
+<strong>TTL Project</strong>
 Project Description
 The Project Management System is a web-based application designed to streamline task management within an organization. It allows managers to efficiently assign tasks to employees, monitor task progress, and maintain clear communication throughout the task lifecycle. This README provides an overview of the project, its features, and instructions for setting it up.
 
