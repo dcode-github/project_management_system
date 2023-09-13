@@ -56,6 +56,7 @@
         }
         /* Style the sidebar */
         .sidebar {
+            min-height: 380px;
             background-color: #064A89;
             color: #fff;
             width: 250px;
@@ -76,9 +77,10 @@
             background-color: #064A89;
         }
         .page {
+            min-height: 380px;
         margin-left: 260px; 
         margin-right: 15px;
-        margin-top:-15px;
+        margin-top:-20px;
         border-radius: 10px;
         box-shadow: 0px 0px 20px 0px #000000;
     }
@@ -123,8 +125,9 @@
     <br>
     <header class="second-header">
         <p style="color: black; margin-left: 15px;"><strong>Welcome, <%= mngName %></strong></p>
+        <p style="color: black; text-align: center;"><strong>Manager's Dashboard</strong></p>
         <a href="login.html">
-            <button id="logout" name="logout">Logout</button>
+            <button id="logout" type="submit">Logout</button>
         </a>
     </header>
     <br>
@@ -143,22 +146,35 @@
         <form action="/mngReport" method="post" onsubmit="return validateDate()" style="margin-left: 10px;">
             <input type="hidden" name="mngId" value="<%=mngId%>">
             <input type="hidden" name="mngName" value="<%=mngName%>">
-            <label for="empId"><strong>Employee ID:</strong></label>
-            <input type="text" id="empId" name="empId" placeholder="EmployeeID" required oninvalid="this.setCustomValidity('Please Enter valid Empoyee ID')" oninput="setCustomValidity('')">
 
-            <label for="startDate"><strong>Start Date:</strong></label>
+            <label for="empId"><strong>Employee ID:</strong></label>
+            <input type="text" id="empId" name="empId" placeholder="EmployeeID">
+
+            <label for="startDate"><strong>From Date:</strong></label>
             <input type="date" id="startDate" name="startDate" required oninvalid="this.setCustomValidity('Please Enter valid Starting Date')" oninput="setCustomValidity('')">
             
-            <label for="endDate"><strong>End Date:</strong></label>
+            <label for="endDate"><strong>To Date:</strong></label>
             <input type="date" id="endDate" name="endDate" required oninvalid="this.setCustomValidity('Please Enter valid Ending Date')" oninput="setCustomValidity('')">
             
+            <label for="status"><strong>Status:</strong></label>
+            <select class="status-dropdown" name="status">
+                <option value="All">All</option>
+                <option value="Assigned" >Assigned</option>
+                <option value="In Progress" >In Progress</option>
+                <option value="Completed" >Completed</option>
+                <option value="Closed" >Closed</option>
+            </select>
+
             <button type="submit">Generate Report</button>
         </form>
         <% if (tasks.length > 0) { %>
-            <h3 style="margin-left: 10px;">Task Details</h3>
+            <h3 style="text-align: center;">Task Details</h3>
             <table>
                 <thead>
                     <tr>
+                        <th>Serial No.</th>
+                        <th>Employee ID</th>
+                        <th>Employee Name</th>
                         <th>Action Item</th>
                         <th>Task Type</th>
                         <th>CR Number</th>
@@ -172,8 +188,12 @@
                     </tr>
                 </thead>
                 <tbody>
+                    <% let serialNumber = 1; %>
                     <% tasks.forEach(task => { %>
                         <tr>
+                            <td><%= serialNumber++ %></td>
+                            <td><%= task.empId %></td>
+                            <td><%= task.empName %></td>
                             <td><%= task.actionItem %></td>
                             <td><%= task.taskType %></td>
                             <td><%= task.crNumber %></td>
@@ -189,7 +209,7 @@
                 </tbody>
             </table>
         <% } else { %>
-            <p style="margin-left: 10px;">No task was assigned.</p>
+            <p style="margin-left: 10px; margin-top: 50px;">No task was assigned.</p>
         <% } %>
     </div>
     <script>
