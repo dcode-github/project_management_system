@@ -30,6 +30,16 @@
         .second-header{
             height: 15px;
         }
+        button{
+            background-color: #064A89;
+            border: none;
+            color: white;
+            padding: 5px 3px;
+            border-radius: 5px;
+            text-decoration: none;
+            margin-right: 1px;
+            cursor: pointer;
+        }
         #logout {
             background-color: #064A89;
             border: none;
@@ -46,6 +56,7 @@
         }
         /* Style the sidebar */
         .sidebar {
+            min-height: 380px;
             background-color: #064A89;
             color: #fff;
             width: 250px;
@@ -66,9 +77,10 @@
             background-color: #064A89;
         }
         .page {
+            min-height: 380px;
         margin-left: 260px; 
         margin-right: 15px;
-        margin-top:-15px;
+        margin-top:-20px;
         border-radius: 10px;
         box-shadow: 0px 0px 20px 0px #000000;
     }
@@ -108,8 +120,9 @@
     <br>
     <header class="second-header">
         <p style="color: black; margin-left: 15px;"><strong>Welcome, <%= mngName %></strong></p>
+        <p style="color: black; text-align: center;"><strong>Manager's Dashboard</strong></p>
         <a href="login.html">
-            <button id="logout" name="logout">Logout</button>
+            <button id="logout" type="submit">Logout</button>
         </a>
     </header>
     <br>
@@ -129,6 +142,7 @@
             <table>
                 <thead>
                     <tr>
+                        <th>Serial No.</th>
                         <th>Employee ID</th>
                         <th>Employee Name</th>
                         <th>Employee Email</th>
@@ -138,13 +152,16 @@
                         <th>PDC</th>
                         <th>ADC</th>
                         <th>Status</th>
+                        <th>More Details</th>
                     </tr>
                 </thead>
                 <tbody>
+                    <% let serialNumber = 1; %>
                     <% employeesWithClosedTasks.forEach(employee => { %>
                         <% if (employee.tasks && employee.tasks.length > 0) { %>
                             <% employee.tasks.forEach(task => { %>
                                 <tr>
+                                    <td><%= serialNumber++ %></td>
                                     <td><%= employee.empId %></td>
                                     <td><%= employee.name %></td>
                                     <td><%= employee.email %></td>
@@ -154,6 +171,11 @@
                                     <td><%= task.pdc %></td>
                                     <td><%= task.adc %></td>
                                     <td><%= task.status %></td>
+                                    <td>
+                                        <a href="viewMore?crNumber=<%= task.crNumber %>&mngName=<%= mngName %>&mngId=<%=mngId%>&empRemarks=<%=task.empRemarks%>&mangRemarks=<%=task.mangRemarks%>">
+                                            <button>View More</button>
+                                        </a>
+                                    </td>
                                 </tr>
                             <% }); %>
                         <% } else { %>
