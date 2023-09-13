@@ -2,8 +2,9 @@ const express = require('express');
 const mongoose = require('mongoose');
 const nodemailer = require('nodemailer');
 const bodyParser = require('body-parser');
+const cron = require('node-cron');
 const { MongoClient } = require('mongodb');
-const url='mongodb://127.0.0.1:27017';
+const url='mongodb+srv://demo:Danish%40123@cluster0.gxk8gle.mongodb.net/';
 const dbName="empInfo";
 const client = new MongoClient(url, { useUnifiedTopology: true });
 var empId;
@@ -14,6 +15,82 @@ app.set('view engine', 'ejs');
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+/*-------------------------------------Task Reminder----------------------------------------*/
+
+var job=cron.schedule('30 9 * * *', async () => {
+  
+  await sendReminderEmails();
+  
+  console.log('Reminder emails sent.');
+});
+job.start();
+// sendReminderEmails();
+async function sendReminderEmails() {
+  try {
+    await client.connect();
+    const db = client.db(dbName);
+    const collection = db.collection('employeeInfo');
+    const currentDate = new Date();
+
+    const pdcReminderDate = new Date();
+    pdcReminderDate.setDate(currentDate.getDate() + 3);
+
+    const tasks = await collection.find({
+      'task.pdc': { $lte: pdcReminderDate.toISOString().split('T')[0] },
+    }).toArray();
+    
+    const filteredTasks = tasks.map((task) => {
+      const { name,email, task: taskDetails } = task;
+      const filteredTaskDetails = taskDetails.filter((task) => task.status !== 'Closed');
+      return { name,email, task: filteredTaskDetails };
+    });
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: 'demoa8801@gmail.com',
+        pass: 'qhiorlbfbrhclrmn',
+      },
+    });
+    for (const employee of filteredTasks) {
+      const name=employee.name;
+      const employeeEmail=employee.email;
+      for (const subTask of employee.task) {
+        const crNumber = subTask.crNumber;
+        const pdc = subTask.pdc;
+
+        const mailOptions = {
+          from: 'demoa8801@gmail.com',
+          to: employeeEmail,
+          subject: `Task Reminder for ${crNumber}`,
+          html: `
+            <html>
+              <body>
+                <p>Dear ${name},</p>
+                <p>This is a reminder for your task with CR Number ${crNumber}, which is due on ${pdc}.</p>
+                <p>Please make sure to complete it on time.</p>
+                <br>
+                <p>Best regards.</p>
+              </body>
+            </html>
+          `,
+        };
+
+        transporter.sendMail(mailOptions, (error, info) => {
+          if (error) {
+            console.error('Error sending reminder email:', error);
+          } else {
+            console.log('Reminder email sent:', info.response);
+          }
+        });
+      }
+    }
+  } catch (err) {
+    console.error('Error sending reminder emails:', err);
+  } finally {
+    await client.close();
+  }
+}
+
 /*-------------------------------------Login Page------------------------------------------*/
 
 app.post('/login', async (req, res) => {
@@ -21,11 +98,11 @@ app.post('/login', async (req, res) => {
     const password = req.body.password;
     try {
       await client.connect();
-      // console.log('Connected successfully to database');
       const db = client.db(dbName);
       const collection = db.collection('employeeInfo'); 
   
       const user = await collection.findOne({ empId:empId });
+      console.log(user);
   
       if (user && user.password === password) {
         if(user.role==="Project Manager")
@@ -59,6 +136,7 @@ app.post('/assign', async (req, res) => {
   const adc = "";
   const mangRemarks = req.body.mangRemarks;
   const assignedBy = mngId;
+  const additionalCC=req.body.additionalCC;
 
   try {
     await client.connect();
@@ -93,7 +171,15 @@ app.post('/assign', async (req, res) => {
     employeeEmail=employee.email;
     const manager = await collection.findOne({ empId: mngId });
     const managerEmail = manager.email;
-
+    const additionalCCArray = additionalCC.split(',');
+    const additionalCCEmails = [];
+    for (const empId of additionalCCArray) {
+      const employee = await collection.findOne({ empId: empId.trim() });
+      if (employee) {
+        additionalCCEmails.push(employee.email);
+      }
+    }
+    const ccEmails = [managerEmail, ...additionalCCEmails].join(','); 
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
@@ -105,23 +191,18 @@ app.post('/assign', async (req, res) => {
     const mailOptions = {
       from: 'demoa8801@gmail.com',
       to: employeeEmail,
-      cc: managerEmail,
+      cc: ccEmails,
       subject: 'New Task Assigned',
       html: `
         <html>
           <body>
             <p>Dear ${employee.name},</p>
             <p>We hope this message finds you well. We are writing to inform you about a new task that has been assigned to you.</p>
-            <p><strong>CR Number:</strong></p>
-            <p>${crNumber}</p>
-            <p><strong>CR Details:</strong></p>
-            <p>${crDetails}</p>
-            <p><strong>Assigned On:</strong></p>
-            <p>${assignedOn}</p>
-            <p><strong>Due Date:</strong></p>
-            <p>${pdc}</p>
-            <p><strong>Manager Remarks:</strong></p>
-            <p>${mangRemarks}</p>
+            <p><strong>CR Number:</strong> ${crNumber}</p>
+            <p><strong>CR Details:</strong> ${crDetails}</p>
+            <p><strong>Assigned On:</strong> ${assignedOn}</p>
+            <p><strong>Due Date:</strong> ${pdc}</p>
+            <p><strong>Manager Remarks:</strong> ${mangRemarks}</p>
             <br>
             <p>You can view more details on your dashboard.</p>
             <p>Best regards.</p>
@@ -130,13 +211,13 @@ app.post('/assign', async (req, res) => {
       `,
     };
 
-    transporter.sendMail(mailOptions, (error, info) => {
+    transporter.sendMail(mailOptions, async (error, info) => {
       if (error) {
         console.error(error);
         res.status(500).send('An error occurred while sending the email.');
       } else {
         console.log('Email sent:', info.response);
-        client.connect();
+        await client.connect();
         const db = client.db(dbName);
         const collection = db.collection('employeeInfo');
         collection.updateOne(
@@ -247,14 +328,10 @@ app.post('/updateTaskStatus', async (req, res) => {
             <body>
               <p>Dear ${employee.name},</p>
               <p>We have an update on your task ${crNumber}.</p>
-              <p><strong>CR Number:</strong></p>
-              <p>${crNumber}</p>
-              <p><strong>Status:</strong></p>
-              <p>${status}</p>
-              <p><strong>Manager Remarks:</strong></p>
-              <p>${mangRemarks}</p>
-              <p><strong>Employee Remarks:</strong></p>
-              <p>${empRemarks}</p>
+              <p><strong>CR Number:</strong> ${crNumber}</p>
+              <p><strong>Status:</strong> ${status}</p>
+              <p><strong>Manager Remarks:</strong> ${mangRemarks}</p>
+              <p><strong>Employee Remarks:</strong> ${empRemarks}</p>
               <br>
               <p>You can view more details on your dashboard.</p>
               <p>Best regards.</p>
@@ -275,10 +352,8 @@ app.post('/updateTaskStatus', async (req, res) => {
             <body>
               <p>Dear ${employee.name},</p>
               <p>Your task with CR Number ${crNumber} has been closed</p>
-              <p><strong>Manager Remarks:</strong></p>
-              <p>${mangRemarks}</p>
-              <p><strong>Employee Remarks:</strong></p>
-              <p>${empRemarks}</p>
+              <p><strong>Manager Remarks:</strong> ${mangRemarks}</p>
+              <p><strong>Employee Remarks:</strong> ${empRemarks}</p>
               <br>
               <p>You can view more details on your dashboard.</p>
               <p>Best regards.</p>
@@ -311,25 +386,39 @@ app.post('/empReport', async (req, res) => {
   const empName = req.body.empName;
   const startDate = new Date(req.body.startDate);
   const endDate = new Date(req.body.endDate);
-
+  const status=req.body.status;
   try {
     await client.connect();
     const db = client.db(dbName);
     const collection = db.collection('employeeInfo');
-
-    const tasksData = await collection.find({
-      empId: empId,
-      'task.assignedOn': {
-        $gte: startDate.toISOString().split('T')[0],
-        $lte: endDate.toISOString().split('T')[0],
-      },
-    }).project({ task: 1, _id: 0 }).toArray();
+    let tasksData;
+    if(status!=='All')
+    {
+      tasksData = await collection.find({
+        empId: empId,
+        'task.status':status,
+        'task.assignedOn': {
+          $gte: startDate.toISOString().split('T')[0],
+          $lte: endDate.toISOString().split('T')[0],
+        },
+      }).project({ task: 1, _id: 0 }).toArray();
+    }
+    else
+    {
+      tasksData = await collection.find({
+        empId: empId,
+        'task.assignedOn': {
+          $gte: startDate.toISOString().split('T')[0],
+          $lte: endDate.toISOString().split('T')[0],
+        },
+      }).project({ task: 1, _id: 0 }).toArray();
+    }
 
     const tasks = tasksData
       .flatMap((doc) => doc.task)
       .filter((task) => {
         const taskDate = new Date(task.assignedOn);
-        return taskDate >= startDate && taskDate <= endDate;
+        return taskDate >= startDate && taskDate <= endDate && (status === 'All' || task.status === status);
       });
     res.render('empReport', { empName: empName, empId: empId, tasks: tasks });
   } catch (err) {
@@ -344,30 +433,68 @@ app.post('/empReport', async (req, res) => {
 
 app.post('/mngReport', async (req, res) => {
   const empId = req.body.empId;
-  const mngId=req.body.mngId;
+  const mngId = req.body.mngId;
   const mngName = req.body.mngName;
   const startDate = new Date(req.body.startDate);
   const endDate = new Date(req.body.endDate);
+  const status = req.body.status;
 
   try {
     await client.connect();
     const db = client.db(dbName);
     const collection = db.collection('employeeInfo');
+    let tasksData;
 
-    const tasksData = await collection.find({
-      empId: empId,
-      'task.assignedOn': {
-        $gte: startDate.toISOString().split('T')[0],
-        $lte: endDate.toISOString().split('T')[0],
-      },
-    }).project({ task: 1, _id: 0 }).toArray();
-
+    if (empId !== '') {
+      if (status !== 'All') {
+        tasksData = await collection.find({
+          empId: empId,
+          'task.assignedOn': {
+            $gte: startDate.toISOString().split('T')[0],
+            $lte: endDate.toISOString().split('T')[0],
+          },
+        }).project({ empId: 1, name: 1, task: 1, _id: 0 }).toArray();
+      } else {
+        tasksData = await collection.find({
+          empId: empId,
+          'task.assignedOn': {
+            $gte: startDate.toISOString().split('T')[0],
+            $lte: endDate.toISOString().split('T')[0],
+          },
+        }).project({ empId: 1, name: 1, task: 1, _id: 0 }).toArray();
+      }
+    } else {
+      if (status !== 'All') {
+        tasksData = await collection.find({
+          mngId: mngId,
+          'task.assignedOn': {
+            $gte: startDate.toISOString().split('T')[0],
+            $lte: endDate.toISOString().split('T')[0],
+          },
+        }).project({ empId: 1, name: 1, task: 1, _id: 0 }).toArray();
+      } else {
+        tasksData = await collection.find({
+          mngId: mngId,
+          'task.assignedOn': {
+            $gte: startDate.toISOString().split('T')[0],
+            $lte: endDate.toISOString().split('T')[0],
+          },
+        }).project({ empId: 1, name: 1, task: 1, _id: 0 }).toArray();
+      }
+    }
+    
     const tasks = tasksData
-      .flatMap((doc) => doc.task)
-      .filter((task) => {
-        const taskDate = new Date(task.assignedOn);
-        return taskDate >= startDate && taskDate <= endDate;
-      });
+    .flatMap((doc) => doc.task.map((task) => ({
+      ...task,
+      empId: doc.empId,
+      empName: doc.name,
+    })))
+    .filter((task) => {
+      const taskDate = new Date(task.assignedOn);
+      return taskDate >= startDate && taskDate <= endDate && (status === 'All' || task.status === status);
+    });
+
+      
     res.render('mngReport', { mngName: mngName, mngId: mngId, tasks: tasks });
   } catch (err) {
     console.error('Error fetching tasks:', err);
@@ -464,7 +591,8 @@ app.get('/addEmployee', (req, res) => {
 });
 
 app.get('/manager', async (req, res) => {
-  const mngId = empId;
+  const mngId = empId; 
+
   try {
     await client.connect();
     const db = client.db(dbName);
@@ -473,14 +601,41 @@ app.get('/manager', async (req, res) => {
     const manager = await collection.findOne({ empId: empId });
     const managerName = manager.name;
 
-    const closedTaskCount = await collection.countDocuments({
-      'task.status': 'Closed',
-      'mngId': mngId
-    });
+    const taskCountsPipeline = [
+      {
+        $match: {
+          mngId: mngId,
+          'task.status': { $in: ['Closed', 'Assigned', 'In Progress', 'Completed'] }
+        }
+      },
+      {
+        $unwind: '$task'
+      },
+      {
+        $group: {
+          _id: '$task.status',
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $group: {
+          _id: '$_id',
+          count: { $sum: '$count' }
+        }
+      }
+    ];    
 
-    const notClosedTaskCount = await collection.countDocuments({
-      'task.status': { $ne: 'Closed' },
-      'mngId': mngId
+    const taskCounts = await collection.aggregate(taskCountsPipeline).toArray();
+
+    let closedTaskCount = 0;
+    let notClosedTaskCount = 0;
+
+    taskCounts.forEach(task => {
+      if (task._id === 'Closed') {
+        closedTaskCount += task.count;
+      } else {
+        notClosedTaskCount += task.count;
+      }
     });
 
     res.render('manager', {
@@ -488,7 +643,7 @@ app.get('/manager', async (req, res) => {
       mngId: empId,
       closedTaskCount: closedTaskCount,
       notClosedTaskCount: notClosedTaskCount,
-      manager:manager
+      manager: manager
     }, (err, html) => {
       if (err) {
         console.error('Error rendering template:', err);
