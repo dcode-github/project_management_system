@@ -567,11 +567,11 @@ app.post('/mngReset', async (req, res) => {
 /*-----------------------------------------Get Requests-------------------------------------*/
 
 app.get('/',(req,res)=>{
-    res.sendFile(__dirname+'/login.html');
+    res.render('login');
 });
 
 app.get('/login.html', (req, res) => {
-    res.sendFile(__dirname + '/login.html');
+  res.render('login');
 });
 
 app.get('/assignTask', (req, res) => {
